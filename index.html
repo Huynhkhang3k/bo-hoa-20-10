@@ -27,6 +27,8 @@ button[aria-pressed="true"] { color: #1a1400; background: var(--accent); border-
 <div class="controls">
     <button id="replay" type="button">Phát lại</button>
     <button id="sound" type="button" aria-pressed="false">Bật nhạc</button>
+    <button id="pickbtn" type="button">Chọn bài nhạc</button>
+    <input id="pick" type="file" accept="audio/*" hidden>
   </div>
 
 <script>
@@ -218,6 +220,13 @@ function scheduleMusic(at) {
 }
 function stopMusic() { nodes.forEach(n => n.disconnect()); nodes = []; }
 
+// ===== Bài hát riêng: đặt file nhac.mp3 cạnh trang này, hoặc bấm "Chọn bài nhạc" =====
+const SONG_START = 0; // giây bắt đầu phát trong bài
+const song = new Audio(); let hasSong = false;
+song.loop = true; song.preload = "auto";
+song.addEventListener("canplay", () => { hasSong = true; }, { once: true });
+song.src = "nhac.mp3"; // không có file thì dùng nhạc hộp nhạc tự tạo
+
 // ===== Vòng lặp =====
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let start = performance.now(), lastLoop = -1;
@@ -226,14 +235,25 @@ function restart() {
 }
 function tick(now) {
   const el = (now - start) / 1000, loop = Math.floor(el / LOOP), t = el % LOOP;
-  if (loop !== lastLoop) { lastLoop = loop; if (soundOn) { stopMusic(); scheduleMusic(ac.currentTime + .05); } }
+  if (loop !== lastLoop) { lastLoop = loop; if (soundOn && !hasSong) { stopMusic(); scheduleMusic(ac.currentTime + .05); } }
   draw(reduce ? 14 : t);
   requestAnimationFrame(tick);
 }
-document.getElementById("replay").onclick = restart;
-document.getElementById("sound").onclick = e => {
-  soundOn = !soundOn; e.currentTarget.setAttribute("aria-pressed", soundOn); e.currentTarget.textContent = soundOn ? "Tắt nhạc" : "Bật nhạc";
-  if (soundOn) { ac = ac || new AudioContext(); ac.resume(); restart(); } else stopMusic();
+document.getElementById("replay").onclick = () => { restart(); if (soundOn && hasSong) song.currentTime = SONG_START; };
+const soundBtn = document.getElementById("sound"), pick = document.getElementById("pick");
+function setSound(on) {
+  soundOn = on; soundBtn.setAttribute("aria-pressed", on); soundBtn.textContent = on ? "Tắt nhạc" : "Bật nhạc";
+  stopMusic(); song.pause();
+  if (!on) return;
+  if (hasSong) { song.currentTime = SONG_START; song.play().catch(() => {}); }
+  else { ac = ac || new AudioContext(); ac.resume(); }
+  restart();
+}
+soundBtn.onclick = () => setSound(!soundOn);
+document.getElementById("pickbtn").onclick = () => pick.click();
+pick.onchange = () => {
+  const f = pick.files[0]; if (!f) return;
+  song.src = URL.createObjectURL(f); hasSong = true; setSound(true);
 };
 Promise.all([document.fonts.load(`800 100px ${UI}`), document.fonts.load(`500 34px ${UI}`), document.fonts.load(`700 34px ${UI}`), document.fonts.load(`italic 500 42px ${MATH}`)])
   .catch(() => {}).finally(() => { resize(); restart(); requestAnimationFrame(tick); });
