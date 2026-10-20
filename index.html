@@ -1,0 +1,230 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bó hoa phương trình 20/10</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;700;800&family=Crimson+Pro:ital,wght@1,500&display=swap">
+<style>
+/* Layout: one 9:16 canvas stage centered on a night-navy ground, controls floating at its foot */
+:root {
+  --bg: #0b0f22; --ink: #e8e4ff; --muted: #9a94c8; --btn: rgba(255,255,255,.08); --btn-line: rgba(255,255,255,.18); --accent: #ffd23f;
+  --ui: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--ui);
+  display: grid; place-items: center; overflow: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px;
+  box-sizing: border-box;
+}
+.stage { position: relative; height: min(100%, calc((100vw - 32px) * 16 / 9)); aspect-ratio: 9 / 16; max-width: 100%; }
+canvas { width: 100%; height: 100%; display: block; border-radius: 14px; background: var(--bg); }
+.controls { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; gap: 8px; justify-content: center; }
+button {
+  font: 600 13px var(--ui); color: var(--ink); background: var(--btn); border: 1px solid var(--btn-line);
+  border-radius: 999px; padding: 8px 14px; cursor: pointer; backdrop-filter: blur(6px);
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { color: #1a1400; background: var(--accent); border-color: var(--accent); }
+</style>
+
+<div class="stage">
+  <canvas id="cv" width="1080" height="1920" aria-label="Hoạt hình bó hoa vẽ bằng phương trình chúc mừng 20/10"></canvas>
+  <div class="controls">
+    <button id="replay" type="button">Phát lại</button>
+    <button id="sound" type="button" aria-pressed="false">Bật nhạc</button>
+  </div>
+</div>
+
+<script>
+// ===== Nội dung: sửa ở đây =====
+const TEXT = {
+  header: "20/10 · TẶNG CÁC BẠN NỮ",
+  cap1: "Không có hoa thật",
+  cap2: "Nên tặng bó hoa vẽ bằng phương trình",
+  cap3: "Xinh như một bông hồng",
+  cap4: "Giỏi như một định lý đẹp",
+  title: "Chúc mừng 20/10",
+  sub: "Ngày Phụ nữ Việt Nam",
+  sign: "Gửi các bạn nữ",
+};
+const EQ = { pink: "r = cos 4θ", yellow: "r = sin 5θ", purple: "r = cos 3θ", heart: "x² + (y − ∛x²)² = 1" };
+
+// ===== Hoạt hình =====
+const W = 1080, H = 1920, DUR = 16, LOOP = 19;
+const PINK = "#ff6fa8", YEL = "#ffd23f", PUR = "#a98bff", STEM = "#7fdcb0", LEAF = "#4fb38a", RED = "#ff4d6d";
+const UI = '"Be Vietnam Pro", system-ui, sans-serif', MATH = '"Crimson Pro", Georgia, serif';
+
+const clamp = x => Math.max(0, Math.min(1, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => (x = clamp(x), x * x * (3 - 2 * x));
+const back = x => (x = clamp(x), 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2);
+
+function rose(cx, cy, R, f, k, span, rot, n = 900) {
+  const p = [];
+  for (let i = 0; i < n; i++) { const th = span * i / (n - 1), r = f(k * th), a = th + rot; p.push([cx + R * r * Math.cos(a), cy - R * r * Math.sin(a)]); }
+  return p;
+}
+const BASE = [540, 1222];
+const FLOWERS = [
+  { c: PINK, pts: rose(540, 647, 180, Math.cos, 4, 2 * Math.PI, Math.PI / 8), ctr: [540, 647], eq: "pink", eqpos: [540, 455], draw: [0.4, 2.2], fill: [2.0, 2.8] },
+  { c: YEL, pts: rose(300, 800, 128, Math.sin, 5, Math.PI, 0.25), ctr: [300, 800], eq: "yellow", eqpos: [170, 628], draw: [2.2, 3.6], fill: [3.4, 4.2] },
+  { c: PUR, pts: rose(778, 800, 118, Math.cos, 3, Math.PI, 0.35), ctr: [778, 800], eq: "purple", eqpos: [915, 628], draw: [3.6, 5.0], fill: [4.8, 5.6] },
+];
+// tim: x² + (y − ∛x²)² = 1  →  x = cos t, y = sin t + |cos t|^(2/3)
+const HEART = [];
+for (let i = 0; i < 900; i++) { const t = -Math.PI / 2 + 2 * Math.PI * i / 899; HEART.push([540 + 70 * Math.cos(t), BASE[1] - 6 - 70 * (Math.sin(t) + Math.abs(Math.cos(t)) ** (2 / 3) + 1)]); }
+const LEAVES = [[0, .55, 1, 30], [1, .45, -1, -35], [2, .45, 1, 35], [1, .75, 1, 20]];
+
+let seed = 7; const rnd = (a, b) => (seed = (seed * 16807) % 2147483647, a + (b - a) * seed / 2147483647);
+const PARTS = Array.from({ length: 40 }, () => ({ x: rnd(60, 1020), y: rnd(300, 1500), vy: rnd(-14, -5), vx: rnd(-6, 6), s: rnd(3, 7), c: [PINK, YEL, PUR, STEM][Math.floor(rnd(0, 4))], ph: rnd(0, 6.28), t0: rnd(1.5, 9) }));
+const SHAPES = Array.from({ length: 12 }, () => ({ x: rnd(0, W), y: rnd(0, H), k: Math.floor(rnd(3, 6)), r: rnd(18, 40), vy: rnd(-10, -4), rot: rnd(0, 6.28) }));
+
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const bg = document.createElement("canvas"); bg.width = W; bg.height = H;
+(() => {
+  const g = bg.getContext("2d");
+  let lg = g.createLinearGradient(0, 0, 0, H); lg.addColorStop(0, "#10162c"); lg.addColorStop(1, "#0a0e1e");
+  g.fillStyle = lg; g.fillRect(0, 0, W, H);
+  let rg = g.createRadialGradient(540, 800, 0, 540, 800, 620); rg.addColorStop(0, "rgba(150,60,130,.35)"); rg.addColorStop(1, "rgba(150,60,130,0)");
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  g.lineWidth = 2;
+  g.strokeStyle = "rgba(60,75,110,.35)"; for (let x = 0; x < W; x += 90) { g.beginPath(); g.moveTo(x + 1, 0); g.lineTo(x + 1, H); g.stroke(); }
+  g.strokeStyle = "rgba(90,85,70,.3)"; for (let y = 30; y < H; y += 90) { g.beginPath(); g.moveTo(0, y + 1); g.lineTo(W, y + 1); g.stroke(); }
+  let vg = g.createRadialGradient(540, 960, 400, 540, 960, 1150); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.45)");
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+})();
+
+function path(pts, n = pts.length) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n; i++) ctx.lineTo(pts[i][0], pts[i][1]); }
+function glowLine(pts, n, color, a) {
+  ctx.save(); ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = color;
+  path(pts, n);
+  ctx.globalAlpha = .12 * a; ctx.lineWidth = 16; ctx.stroke();
+  ctx.globalAlpha = a; ctx.lineWidth = 4; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.stroke();
+  ctx.restore();
+}
+function dot(x, y, r, color, a = 1) { if (r <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.restore(); }
+function text(s, x, y, size, color, a, weight = 500, font = UI, style = "") {
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = Math.min(1, a); ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `${style} ${weight} ${size}px ${font}`; ctx.fillText(s, x, y); ctx.restore();
+}
+
+function draw(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(bg, 0, 0);
+
+  ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.06)"; ctx.lineWidth = 2;
+  for (const s of SHAPES) {
+    const y = ((s.y + s.vy * t) % H + H) % H, o = s.rot + t * .2;
+    ctx.beginPath(); for (let i = 0; i <= s.k; i++) { const a = o + 2 * Math.PI * i / s.k; ctx.lineTo(s.x + s.r * Math.cos(a), y + s.r * Math.sin(a)); } ctx.stroke();
+  }
+  ctx.restore();
+
+  const dim = 1 - .45 * ease(prog(t, 11, 11.8));
+  text(TEXT.header, 540, 375, 27, "#c9c3f0", .85 * ease(prog(t, 0, .6)), 700);
+
+  const sp = ease(prog(t, 5, 6.2));
+  if (sp > 0) {
+    ctx.save(); ctx.strokeStyle = STEM; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.globalAlpha = dim;
+    for (const f of FLOWERS) { ctx.beginPath(); ctx.moveTo(...BASE); ctx.lineTo(BASE[0] + (f.ctr[0] - BASE[0]) * sp, BASE[1] + (f.ctr[1] - BASE[1]) * sp); ctx.stroke(); }
+    ctx.restore();
+    LEAVES.forEach(([si, fr, side, ang], j) => {
+      const lp = back(prog(t, 5.8 + j * .15, 6.4 + j * .15)); if (lp <= 0) return;
+      const c = FLOWERS[si].ctr, px = BASE[0] + (c[0] - BASE[0]) * fr, py = BASE[1] + (c[1] - BASE[1]) * fr;
+      ctx.save(); ctx.globalAlpha = .9 * dim; ctx.fillStyle = LEAF; ctx.beginPath();
+      ctx.ellipse(px + side * 34, py, 31 * lp, 14 * lp, -ang * Math.PI / 180, 0, 7); ctx.fill(); ctx.restore();
+    });
+  }
+
+  for (const f of FLOWERS) {
+    const dp = ease(prog(t, ...f.draw));
+    if (t >= f.draw[0] - .2) dot(...f.ctr, 10 * back(prog(t, f.draw[0] - .2, f.draw[0] + .2)), YEL, dim);
+    if (dp > 0) {
+      const n = Math.max(2, Math.floor(f.pts.length * dp)), fa = ease(prog(t, ...f.fill));
+      if (fa > 0) { ctx.save(); ctx.globalAlpha = .32 * fa * dim; ctx.fillStyle = f.c; path(f.pts); ctx.fill(); ctx.restore(); }
+      glowLine(f.pts, n, f.c, dim);
+      if (dp < 1) dot(...f.pts[n - 1], 8, YEL);
+    }
+    text(EQ[f.eq], ...f.eqpos, 42, f.c, dim * ease(prog(t, f.draw[0] + .2, f.draw[0] + .8)), 500, MATH, "italic");
+  }
+
+  const hp = ease(prog(t, 7.2, 8.6));
+  if (hp > 0) {
+    const k = t > 9 ? 1 + .04 * Math.sin((t - 9) * 5) : 1;
+    const pts = HEART.map(([x, y]) => [540 + (x - 540) * k, BASE[1] + (y - BASE[1]) * k]);
+    const n = Math.max(2, Math.floor(pts.length * hp)), fa = ease(prog(t, 8.4, 9.2));
+    if (fa > 0) { ctx.save(); ctx.globalAlpha = .55 * fa * dim; ctx.fillStyle = RED; path(pts); ctx.fill(); ctx.restore(); }
+    glowLine(pts, n, RED, dim);
+    if (hp < 1) dot(...pts[n - 1], 8, YEL);
+  }
+  text(EQ.heart, 850, 1150, 34, RED, .9 * dim * ease(prog(t, 8, 8.6)), 500, MATH, "italic");
+
+  for (const p of PARTS) {
+    if (t < p.t0) continue; const dt = t - p.t0;
+    dot(p.x + p.vx * dt, p.y + p.vy * dt, p.s, p.c, .8 * Math.min(1, dt * 2) * (.45 + .4 * Math.sin(t * 3 + p.ph)));
+  }
+
+  const out1 = 1 - ease(prog(t, 6.8, 7.2)), out2 = 1 - ease(prog(t, 11, 11.4));
+  const cap = (s, y, a0, a1, out, big) => { const e = ease(prog(t, a0, a1)); text(s, 540, y + 12 * (1 - e), big ? 36 : 34, big ? YEL : "#ffffff", e * out, big ? 700 : 500); };
+  cap(TEXT.cap1, 1300, .3, .8, out1, false);
+  cap(TEXT.cap2, 1352, 2.4, 3.0, out1, true);
+  cap(TEXT.cap3, 1300, 7.2, 7.7, out2, false);
+  cap(TEXT.cap4, 1352, 9.6, 10.1, out2, true);
+
+  const ts = back(prog(t, 11.3, 11.9));
+  if (ts > 0) {
+    ctx.save(); ctx.translate(540, 1325); ctx.scale(ts, ts);
+    ctx.shadowColor = "rgba(255,160,60,.55)"; ctx.shadowBlur = 30;
+    text(TEXT.title, 0, 0, 100, YEL, clamp(ts), 800); ctx.restore();
+  }
+  text(TEXT.sub, 540, 1430, 40, PINK, ease(prog(t, 12, 12.5)), 700);
+  text(TEXT.sign, 540, 1490, 30, "#e8e4ff", ease(prog(t, 12.4, 12.9)), 500);
+
+  const fade = Math.max(prog(t, LOOP - .6, LOOP), 1 - prog(t, 0, .3)); // nhịp chuyển khi lặp lại
+  if (fade > 0) { ctx.fillStyle = `rgba(8,10,22,${fade})`; ctx.fillRect(0, 0, W, H); }
+}
+
+// ===== Nhạc hộp nhạc (Web Audio, chỉ phát sau khi bấm) =====
+let ac = null, soundOn = false, nodes = [];
+function scheduleMusic(at) {
+  const hz = m => 440 * 2 ** ((m - 69) / 12);
+  const chords = [[60, 64, 67, 72], [57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67]];
+  const master = ac.createGain(); master.gain.value = .5; master.connect(ac.destination); nodes.push(master);
+  for (let k = 0; k < DUR / .25; k++) {
+    const t0 = at + k * .25, ch = chords[Math.floor(k * .25 / 4) % 4], m = ch[[0, 1, 2, 3, 2, 1, 3, 2][k % 8]] + 12;
+    for (const [mul, vol] of [[1, .18], [2, .05]]) {
+      const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = hz(m) * mul;
+      g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + 1.4);
+      o.connect(g).connect(master); o.start(t0); o.stop(t0 + 1.5);
+    }
+  }
+  chords.forEach((ch, c) => ch.forEach(m => {
+    const o = ac.createOscillator(), g = ac.createGain(), t0 = at + c * 4; o.frequency.value = hz(m - 12);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.035, t0 + .8); g.gain.setValueAtTime(.035, t0 + 3.2); g.gain.linearRampToValueAtTime(0, t0 + 4);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0 + 4);
+  }));
+}
+function stopMusic() { nodes.forEach(n => n.disconnect()); nodes = []; }
+
+// ===== Vòng lặp =====
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let start = performance.now(), lastLoop = -1;
+function restart() {
+  start = performance.now(); lastLoop = -1;
+}
+function tick(now) {
+  const el = (now - start) / 1000, loop = Math.floor(el / LOOP), t = el % LOOP;
+  if (loop !== lastLoop) { lastLoop = loop; if (soundOn) { stopMusic(); scheduleMusic(ac.currentTime + .05); } }
+  draw(reduce ? 14 : t);
+  requestAnimationFrame(tick);
+}
+document.getElementById("replay").onclick = restart;
+document.getElementById("sound").onclick = e => {
+  soundOn = !soundOn; e.currentTarget.setAttribute("aria-pressed", soundOn); e.currentTarget.textContent = soundOn ? "Tắt nhạc" : "Bật nhạc";
+  if (soundOn) { ac = ac || new AudioContext(); ac.resume(); restart(); } else stopMusic();
+};
+Promise.all([document.fonts.load(`800 100px ${UI}`), document.fonts.load(`500 34px ${UI}`), document.fonts.load(`700 34px ${UI}`), document.fonts.load(`italic 500 42px ${MATH}`)])
+  .catch(() => {}).finally(() => { restart(); requestAnimationFrame(tick); });
+</script>
