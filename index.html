@@ -1,25 +1,19 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bó hoa phương trình 20/10</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;700;800&family=Crimson+Pro:ital,wght@1,500&display=swap">
 <style>
-/* Layout: one 9:16 canvas stage centered on a night-navy ground, controls floating at its foot */
+/* Layout: full-screen canvas; the bouquet scales to fit any screen and the night grid fills the rest */
 :root {
   --bg: #0b0f22; --ink: #e8e4ff; --muted: #9a94c8; --btn: rgba(255,255,255,.08); --btn-line: rgba(255,255,255,.18); --accent: #ffd23f;
   --ui: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
 }
 html, body { height: 100%; margin: 0; }
-body {
-  background: var(--bg); color: var(--ink); font-family: var(--ui);
-  display: grid; place-items: center; overflow: hidden;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px;
-  box-sizing: border-box;
-}
-.stage { position: relative; height: min(100%, calc((100vw - 32px) * 16 / 9)); aspect-ratio: 9 / 16; max-width: 100%; }
-canvas { width: 100%; height: 100%; display: block; border-radius: 14px; background: var(--bg); }
-.controls { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; gap: 8px; justify-content: center; }
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); overflow: hidden; }
+canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; background: var(--bg); }
+.controls { position: fixed; left: 0; right: 0; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; justify-content: center; }
 button {
   font: 600 13px var(--ui); color: var(--ink); background: var(--btn); border: 1px solid var(--btn-line);
   border-radius: 999px; padding: 8px 14px; cursor: pointer; backdrop-filter: blur(6px);
@@ -29,13 +23,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button[aria-pressed="true"] { color: #1a1400; background: var(--accent); border-color: var(--accent); }
 </style>
 
-<div class="stage">
-  <canvas id="cv" width="1080" height="1920" aria-label="Hoạt hình bó hoa vẽ bằng phương trình chúc mừng 20/10"></canvas>
-  <div class="controls">
+<canvas id="cv" aria-label="Hoạt hình bó hoa vẽ bằng phương trình chúc mừng 20/10"></canvas>
+<div class="controls">
     <button id="replay" type="button">Phát lại</button>
     <button id="sound" type="button" aria-pressed="false">Bật nhạc</button>
   </div>
-</div>
 
 <script>
 // ===== Nội dung: sửa ở đây =====
@@ -78,30 +70,49 @@ for (let i = 0; i < 900; i++) { const t = -Math.PI / 2 + 2 * Math.PI * i / 899; 
 const LEAVES = [[0, .55, 1, 30], [1, .45, -1, -35], [2, .45, 1, 35], [1, .75, 1, 20]];
 
 let seed = 7; const rnd = (a, b) => (seed = (seed * 16807) % 2147483647, a + (b - a) * seed / 2147483647);
-const PARTS = Array.from({ length: 40 }, () => ({ x: rnd(60, 1020), y: rnd(300, 1500), vy: rnd(-14, -5), vx: rnd(-6, 6), s: rnd(3, 7), c: [PINK, YEL, PUR, STEM][Math.floor(rnd(0, 4))], ph: rnd(0, 6.28), t0: rnd(1.5, 9) }));
-const SHAPES = Array.from({ length: 12 }, () => ({ x: rnd(0, W), y: rnd(0, H), k: Math.floor(rnd(3, 6)), r: rnd(18, 40), vy: rnd(-10, -4), rot: rnd(0, 6.28) }));
+const PARTS = Array.from({ length: 40 }, () => ({ fx: rnd(0, 1), fy: rnd(0, 1), vy: rnd(-14, -5), vx: rnd(-6, 6), s: rnd(3, 7), c: [PINK, YEL, PUR, STEM][Math.floor(rnd(0, 4))], ph: rnd(0, 6.28), t0: rnd(1.5, 9) }));
+const SHAPES = Array.from({ length: 12 }, () => ({ fx: rnd(0, 1), fy: rnd(0, 1), k: Math.floor(rnd(3, 6)), r: rnd(18, 40), vy: rnd(-10, -4), rot: rnd(0, 6.28) }));
 
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
-const bg = document.createElement("canvas"); bg.width = W; bg.height = H;
-(() => {
-  const g = bg.getContext("2d");
-  let lg = g.createLinearGradient(0, 0, 0, H); lg.addColorStop(0, "#10162c"); lg.addColorStop(1, "#0a0e1e");
-  g.fillStyle = lg; g.fillRect(0, 0, W, H);
-  let rg = g.createRadialGradient(540, 800, 0, 540, 800, 620); rg.addColorStop(0, "rgba(150,60,130,.35)"); rg.addColorStop(1, "rgba(150,60,130,0)");
-  g.fillStyle = rg; g.fillRect(0, 0, W, H);
-  g.lineWidth = 2;
-  g.strokeStyle = "rgba(60,75,110,.35)"; for (let x = 0; x < W; x += 90) { g.beginPath(); g.moveTo(x + 1, 0); g.lineTo(x + 1, H); g.stroke(); }
-  g.strokeStyle = "rgba(90,85,70,.3)"; for (let y = 30; y < H; y += 90) { g.beginPath(); g.moveTo(0, y + 1); g.lineTo(W, y + 1); g.stroke(); }
-  let vg = g.createRadialGradient(540, 960, 400, 540, 960, 1150); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.45)");
-  g.fillStyle = vg; g.fillRect(0, 0, W, H);
-})();
+// Camera: fit the content box (header → signature) into the screen, keep the rest as background
+const CB = { x: 60, y: 345, w: 960, h: 1180 };
+let vw, vh, dpr, S, OX, OY, V;
+function resize() {
+  dpr = Math.min(devicePixelRatio || 1, 2); vw = innerWidth; vh = innerHeight;
+  cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+  const room = vh - 64; // chừa chỗ cho nút
+  S = Math.min(vw * .94 / CB.w, room * .94 / CB.h);
+  OX = vw / 2 - (CB.x + CB.w / 2) * S; OY = room / 2 - (CB.y + CB.h / 2) * S + 6;
+  V = { x: -OX / S, y: -OY / S, w: vw / S, h: vh / S }; // visible world rect
+}
+addEventListener("resize", resize);
+const world = () => ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * OX, dpr * OY);
+const screen = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+function background() {
+  screen();
+  const lg = ctx.createLinearGradient(0, 0, 0, vh); lg.addColorStop(0, "#10162c"); lg.addColorStop(1, "#0a0e1e");
+  ctx.fillStyle = lg; ctx.fillRect(0, 0, vw, vh);
+  world();
+  const rg = ctx.createRadialGradient(540, 800, 0, 540, 800, 620); rg.addColorStop(0, "rgba(150,60,130,.35)"); rg.addColorStop(1, "rgba(150,60,130,0)");
+  ctx.fillStyle = rg; ctx.fillRect(V.x, V.y, V.w, V.h);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(60,75,110,.35)"; ctx.beginPath();
+  for (let x = Math.floor(V.x / 90) * 90; x < V.x + V.w; x += 90) { ctx.moveTo(x + 1, V.y); ctx.lineTo(x + 1, V.y + V.h); } ctx.stroke();
+  ctx.strokeStyle = "rgba(90,85,70,.3)"; ctx.beginPath();
+  for (let y = Math.floor(V.y / 90) * 90 + 30; y < V.y + V.h; y += 90) { ctx.moveTo(V.x, y + 1); ctx.lineTo(V.x + V.w, y + 1); } ctx.stroke();
+  screen();
+  const r = Math.hypot(vw, vh) / 2, vg = ctx.createRadialGradient(vw / 2, vh / 2, r * .45, vw / 2, vh / 2, r * 1.1);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.45)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, vw, vh);
+  world();
+}
 
 function path(pts, n = pts.length) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n; i++) ctx.lineTo(pts[i][0], pts[i][1]); }
 function glowLine(pts, n, color, a) {
   ctx.save(); ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = color;
   path(pts, n);
   ctx.globalAlpha = .12 * a; ctx.lineWidth = 16; ctx.stroke();
-  ctx.globalAlpha = a; ctx.lineWidth = 4; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.stroke();
+  ctx.globalAlpha = a; ctx.lineWidth = 4; ctx.shadowColor = color; ctx.shadowBlur = 18 * S * dpr; ctx.stroke();
   ctx.restore();
 }
 function dot(x, y, r, color, a = 1) { if (r <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.restore(); }
@@ -112,13 +123,12 @@ function text(s, x, y, size, color, a, weight = 500, font = UI, style = "") {
 }
 
 function draw(t) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(bg, 0, 0);
+  background();
 
   ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.06)"; ctx.lineWidth = 2;
   for (const s of SHAPES) {
-    const y = ((s.y + s.vy * t) % H + H) % H, o = s.rot + t * .2;
-    ctx.beginPath(); for (let i = 0; i <= s.k; i++) { const a = o + 2 * Math.PI * i / s.k; ctx.lineTo(s.x + s.r * Math.cos(a), y + s.r * Math.sin(a)); } ctx.stroke();
+    const x = V.x + s.fx * V.w, y = V.y + (((s.fy * V.h + s.vy * t) % V.h) + V.h) % V.h, o = s.rot + t * .2;
+    ctx.beginPath(); for (let i = 0; i <= s.k; i++) { const a = o + 2 * Math.PI * i / s.k; ctx.lineTo(x + s.r * Math.cos(a), y + s.r * Math.sin(a)); } ctx.stroke();
   }
   ctx.restore();
 
@@ -163,7 +173,7 @@ function draw(t) {
 
   for (const p of PARTS) {
     if (t < p.t0) continue; const dt = t - p.t0;
-    dot(p.x + p.vx * dt, p.y + p.vy * dt, p.s, p.c, .8 * Math.min(1, dt * 2) * (.45 + .4 * Math.sin(t * 3 + p.ph)));
+    dot(V.x + p.fx * V.w + p.vx * dt, V.y + p.fy * V.h + p.vy * dt, p.s, p.c, .8 * Math.min(1, dt * 2) * (.45 + .4 * Math.sin(t * 3 + p.ph)));
   }
 
   const out1 = 1 - ease(prog(t, 6.8, 7.2)), out2 = 1 - ease(prog(t, 11, 11.4));
@@ -176,14 +186,14 @@ function draw(t) {
   const ts = back(prog(t, 11.3, 11.9));
   if (ts > 0) {
     ctx.save(); ctx.translate(540, 1325); ctx.scale(ts, ts);
-    ctx.shadowColor = "rgba(255,160,60,.55)"; ctx.shadowBlur = 30;
+    ctx.shadowColor = "rgba(255,160,60,.55)"; ctx.shadowBlur = 30 * S * dpr;
     text(TEXT.title, 0, 0, 100, YEL, clamp(ts), 800); ctx.restore();
   }
   text(TEXT.sub, 540, 1430, 40, PINK, ease(prog(t, 12, 12.5)), 700);
   text(TEXT.sign, 540, 1490, 30, "#e8e4ff", ease(prog(t, 12.4, 12.9)), 500);
 
   const fade = Math.max(prog(t, LOOP - .6, LOOP), 1 - prog(t, 0, .3)); // nhịp chuyển khi lặp lại
-  if (fade > 0) { ctx.fillStyle = `rgba(8,10,22,${fade})`; ctx.fillRect(0, 0, W, H); }
+  if (fade > 0) { screen(); ctx.fillStyle = `rgba(8,10,22,${fade})`; ctx.fillRect(0, 0, vw, vh); }
 }
 
 // ===== Nhạc hộp nhạc (Web Audio, chỉ phát sau khi bấm) =====
@@ -226,5 +236,5 @@ document.getElementById("sound").onclick = e => {
   if (soundOn) { ac = ac || new AudioContext(); ac.resume(); restart(); } else stopMusic();
 };
 Promise.all([document.fonts.load(`800 100px ${UI}`), document.fonts.load(`500 34px ${UI}`), document.fonts.load(`700 34px ${UI}`), document.fonts.load(`italic 500 42px ${MATH}`)])
-  .catch(() => {}).finally(() => { restart(); requestAnimationFrame(tick); });
+  .catch(() => {}).finally(() => { resize(); restart(); requestAnimationFrame(tick); });
 </script>
