@@ -223,8 +223,11 @@ const song = new Audio(); let hasSong = false;
 song.loop = true; song.preload = "auto";
 let songFailed = false;
 song.addEventListener("canplay", () => { hasSong = true; song.currentTime = SONG_START; startSound(); }, { once: true });
-song.addEventListener("error", () => { songFailed = true; }, { once: true });
-song.src = "nhac.mp3"; // không có file thì dùng nhạc hộp nhạc tự tạo
+// thử file cạnh trang trước, rồi bản lưu trên trang Claude; không được thì dùng nhạc hộp nhạc tự tạo
+const SONG_URLS = ["nhac.mp3", "https://46f028d4-5351-435d-bfea-2b59971ab0d7.frame.claudeusercontent.com/_f/1792503861-60dc/nhac.mp3"];
+let songIdx = 0;
+song.addEventListener("error", () => { if (++songIdx < SONG_URLS.length) song.src = SONG_URLS[songIdx]; else songFailed = true; });
+song.src = SONG_URLS[0];
 
 // ===== Vòng lặp =====
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
