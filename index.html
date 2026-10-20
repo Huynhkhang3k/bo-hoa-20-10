@@ -26,7 +26,6 @@ button[aria-pressed="true"] { color: #1a1400; background: var(--accent); border-
 <canvas id="cv" aria-label="Hoạt hình bó hoa vẽ bằng phương trình chúc mừng 20/10"></canvas>
 <div class="controls">
     <button id="replay" type="button">Phát lại</button>
-    <button id="sound" type="button" aria-pressed="false">Bật nhạc</button>
   </div>
 
 <script>
@@ -222,7 +221,9 @@ function stopMusic() { nodes.forEach(n => n.disconnect()); nodes = []; }
 const SONG_START = 0; // giây bắt đầu phát trong bài
 const song = new Audio(); let hasSong = false;
 song.loop = true; song.preload = "auto";
-song.addEventListener("canplay", () => { hasSong = true; }, { once: true });
+let songFailed = false;
+song.addEventListener("canplay", () => { hasSong = true; song.currentTime = SONG_START; startSound(); }, { once: true });
+song.addEventListener("error", () => { songFailed = true; }, { once: true });
 song.src = "nhac.mp3"; // không có file thì dùng nhạc hộp nhạc tự tạo
 
 // ===== Vòng lặp =====
@@ -238,16 +239,16 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 document.getElementById("replay").onclick = () => { restart(); if (soundOn && hasSong) song.currentTime = SONG_START; };
-const soundBtn = document.getElementById("sound");
-function setSound(on) {
-  soundOn = on; soundBtn.setAttribute("aria-pressed", on); soundBtn.textContent = on ? "Tắt nhạc" : "Bật nhạc";
-  stopMusic(); song.pause();
-  if (!on) return;
-  if (hasSong) { song.currentTime = SONG_START; song.play().catch(() => {}); }
-  else { ac = ac || new AudioContext(); ac.resume(); }
-  restart();
+// Nhạc luôn bật: trình duyệt chỉ cho phát sau lần chạm/bấm đầu tiên, nên thử ngay rồi thử lại khi người xem tương tác
+function startSound() {
+  if (soundOn) return;
+  if (hasSong) song.play().then(() => { soundOn = true; }).catch(() => {});
+  else if (songFailed) {
+    ac = ac || new AudioContext();
+    ac.resume().then(() => { if (soundOn || ac.state !== "running") return; soundOn = true; restart(); });
+  }
 }
-soundBtn.onclick = () => setSound(!soundOn);
+for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, startSound);
 Promise.all([document.fonts.load(`800 100px ${UI}`), document.fonts.load(`500 34px ${UI}`), document.fonts.load(`700 34px ${UI}`), document.fonts.load(`italic 500 42px ${MATH}`)])
   .catch(() => {}).finally(() => { resize(); restart(); requestAnimationFrame(tick); });
 </script>
